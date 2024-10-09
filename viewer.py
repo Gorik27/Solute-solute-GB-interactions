@@ -54,7 +54,6 @@ class My_GLViewWidget(gl.GLViewWidget):
         self.atoms0 = copy.deepcopy(points)
         self.pairs = pairs
         self.npairs = len(pairs)
-        print(pairs)
         self.colors = colors
         self.selection_cutoff = selection_cutoff
         self.plot = gl.GLScatterPlotItem()
@@ -62,6 +61,7 @@ class My_GLViewWidget(gl.GLViewWidget):
         self.dragging = False
         self.size = 0.5
         self.cluster = []
+        self.previous_pos = None
         self.plot.setData(pos=self.atoms, color=self.colors, size=self.size, pxMode=False)
 
     def keyPressEvent(self, ev):
@@ -76,6 +76,10 @@ class My_GLViewWidget(gl.GLViewWidget):
             self.select_pair()
         elif ev.key() == QtCore.Qt.Key_Q:
             self.select_cluster()
+        elif ev.key() == QtCore.Qt.Key_R:
+            self.clear_selection()
+        elif ev.key() == (Qt.Key_Control and Qt.Key_Z):
+            return self.undo_movement()
         return super().keyPressEvent(ev)
     
     def select_pair(self):# to do!!!!!!!!!!!!!!
@@ -93,7 +97,6 @@ class My_GLViewWidget(gl.GLViewWidget):
         for index in self.cluster:
             colors[index] = np.array([0,1,0,1])
         colors = colors[selection]
-        
         self.plot.setData(pos=self.atoms, color=colors)
         
     def select_nearest(self, cluster, cutoff):
@@ -102,6 +105,9 @@ class My_GLViewWidget(gl.GLViewWidget):
         # to do special calc for periodic boundaries!!!!!!!!!!!
         selection = (distance<cutoff)
         return selection
+        
+    def clear_selection(self):
+        self.plot.setData(pos=self.atoms0, color=self.colors)
         
     def mousePressEvent(self, ev):
         if ev.button() == QtCore.Qt.RightButton:
@@ -146,6 +152,7 @@ class My_GLViewWidget(gl.GLViewWidget):
                     if not self.dragging:
                         self.dragging = True
                         self.last_pos = lpos
+                        self.previous_pos = lpos # for undo
                         self.selected = min_index
                 self.plot.setData(color=colors)
             else:
@@ -167,7 +174,8 @@ class My_GLViewWidget(gl.GLViewWidget):
             view_w = self.width()
             view_h = self.height()
             vec = self.cameraPosition()
-            scale = 0.1*self.cameraParams()['distance']
+            scale = self.cameraParams()['distance']
+            self.last_scale = scale
             a = vec.x()
             b = vec.y()
             c = vec.z()
@@ -177,14 +185,29 @@ class My_GLViewWidget(gl.GLViewWidget):
             camera_x /= np.linalg.norm(camera_x)
             camera_y = -np.cross(vec, camera_x)
             camera_y /= np.linalg.norm(camera_y)
-            dx = 10*(lpos.x() - self.last_pos.x())/view_w
-            dy = 10*(lpos.y() - self.last_pos.y())/view_h
+            self.last_camera_x = camera_x
+            self.last_camera_y = camera_y
+            dx = (lpos.x() - self.last_pos.x())/view_w
+            dy = (lpos.y() - self.last_pos.y())/view_h
             self.last_pos = lpos
             self.atoms[self.selected] += (camera_x*dx + camera_y*dy)*scale
             self.plot.setData(pos=self.atoms)
+            self.last_selected = copy.copy(self.selected)
         return super().mouseMoveEvent(ev)
 
-
+    def undo_movement(self):
+        if not self.previous_pos:
+            return 
+        view_w = self.width()
+        view_h = self.height()
+        scale = self.last_scale
+        camera_x = self.last_camera_x
+        camera_y = self.last_camera_y
+        dx = (self.previous_pos.x() - self.last_pos.x())/view_w
+        dy = (self.previous_pos.y() - self.last_pos.y())/view_h
+        self.atoms[self.last_selected] += (camera_x*dx + camera_y*dy)*scale
+        self.plot.setData(pos=self.atoms)
+        self.previous_pos = None
 
 if __name__ == '__main__':    
     app = QtWidgets.QApplication(sys.argv)    
