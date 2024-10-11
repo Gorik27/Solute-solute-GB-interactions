@@ -1,0 +1,27 @@
+clear
+
+units metal
+atom_style atomic
+boundary p p p
+
+variable id index None
+variable structure index sname
+
+log int.log
+include minimization_params.txt
+
+# ATOMS DEFINITION
+read_data ${structure} nocoeff
+
+######################################
+# DEFINE INTERATOMIC POTENTIAL
+
+include GB_potential_AgNi_single.txt
+
+# ---------- Run Minimization --------------------- 
+minimize ${etol} ${ftol} ${maxiter} ${maxeval} 
+
+#write_data int_minimized.dat
+variable Peng equal pe
+run 0
+print "Seg energy ${Peng}"

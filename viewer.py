@@ -107,8 +107,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self.colors = np.array([[0,0,1,1]]*len(self.rs))
             self.GLwidget.myreload(self.rs, self.colors, 
                                  self.selection_cutoff, self.pairs)
+            
 
 class My_GLViewWidget(gl.GLViewWidget):
+    blue = np.array([0,0,1,1])
+    green = np.array([0,1,0,1])
+    red = np.array([1,0,0,1])
     def __init__(self, points, colors, selection_cutoff, pairs, parent):
         super().__init__()
         self.selected_pair_index = -1
@@ -124,14 +128,18 @@ class My_GLViewWidget(gl.GLViewWidget):
         self.addItem(self.plot)
         self.dragging = False
         self.size = 0.5
-        self.cluster = []
+        self._cluster = []
         self.cluster_view = False
         self.previous_pos = None
         self.plot.setData(pos=self.atoms, color=self.colors, size=self.size, 
                           pxMode=False)
         self.ids = copy.deepcopy(self.parent.ids)
         self.ids0 = copy.deepcopy(self.parent.ids)
+        self.inds = np.arange(len(points))
+        self.inds0 = copy.deepcopy(self.inds)
         self.selected = None
+        self.int_energy = None
+        self.int_energies = []
         
     def myreload(self, points, colors, selection_cutoff, pairs):
         self.clear()
@@ -147,7 +155,7 @@ class My_GLViewWidget(gl.GLViewWidget):
         self.addItem(self.plot)
         self.dragging = False
         self.size = 0.5
-        self.cluster = []
+        self._cluster = []
         self.cluster_view = False
         self.previous_pos = None
         self.plot.setData(pos=self.atoms, color=self.colors, size=self.size, 
@@ -171,8 +179,21 @@ class My_GLViewWidget(gl.GLViewWidget):
             self.reset_origin()
         elif ev.key() == (Qt.Key_Control and Qt.Key_Z):
             return self.undo_movement()
+        elif ev.key() == QtCore.Qt.Key_Space:
+            print('space')
+            self.calc_int()
         return super().keyPressEvent(ev)
     
+    def calc_int(self):
+        if len(self.cluster)!=2:
+            raise ValueError('Non pair energies has not implemented yet!')
+            return
+        cluster_ids = self.ind2ids(self.cluster)
+        self.int_energy = self.parent.system.calc_int(*cluster_ids)
+        self.int_energy_msg = ''
+        self.int_energies.append(self.int_energy)
+        self.update_text()
+        
     def select_pair(self):# to do!!!!!!!!!!!!!!
         print(self.pairs[self.selected_pair_index])
         self.atoms = self.atoms0[*self.pairs[self.selected_pair_index]]
@@ -185,11 +206,12 @@ class My_GLViewWidget(gl.GLViewWidget):
             selection = self.select_nearest(cluster)
             self.atoms = self.atoms0[selection]
             self.ids = self.ids0[selection]
+            self.inds = self.inds0[selection]
             self.last_offset = np.mean(self.atoms, axis=0)
             self.atoms -= self.last_offset
             colors = copy.deepcopy(self.colors)
             for index in self.cluster:
-                colors[index] = np.array([0,1,0,1])
+                colors[index] = self.green
             colors = colors[selection]
             self.plot.setData(pos=self.atoms, color=colors)
         
@@ -205,21 +227,46 @@ class My_GLViewWidget(gl.GLViewWidget):
             self.select_cluster()
             self.update_text()
             
+    def ind2ids(self, inds):
+        ids = []
+        for ind in inds:
+            ids.append(self.ids0[ind])
+        return ids
+    
+    @property
+    def cluster(self):
+        return self._cluster
+    
+    @cluster.setter
+    def cluster(self, value):
+        if self._cluster != value:
+            self._cluster = value    
+            self.on_cluster_changed()
+        
     def update_text(self):
-        cluster_ids = []
-        for ind in self.cluster:
-            cluster_ids.append(self.ids0[ind])
+        cluster_ids = '\n'.join(map(str, self.ind2ids(self.cluster)))
         if self.selected:
-            selected_id = self.ids0[self.selected]
+            selected_id = self.ids[self.selected]
         else:
             selected_id = None
+        if self.int_energy:
+            int_energy = f'{round(self.int_energy,2)} kJ/mol'
+        else:
+            int_energy = 'not calculated'
+            
+        int_energies = '\n'.join(map(str, map((lambda x: round(x,2)), self.int_energies)))
+            
         text = f"""viewer output:
 
 Neighbors cutoff {self.parent.neighbors_cutoff}
 
-Interaction energy {0}
+Interaction energy {int_energy} 
 
-Selected cluster {cluster_ids}
+Previous energies: 
+{int_energies}
+
+Selected cluster 
+{cluster_ids}
 
 Moved atom {selected_id}
 """
@@ -229,7 +276,7 @@ Moved atom {selected_id}
         if self.cluster_view:
             colors = copy.deepcopy(self.colors)
             for index in self.cluster:
-                colors[index] = np.array([0,1,0,1])
+                colors[index] = self.green
             self.plot.setData(pos=self.atoms0-self.last_offset, color=colors)
             self.cluster_view = False
         
@@ -279,25 +326,38 @@ Moved atom {selected_id}
                 #print('no selection')
         return super().mousePressEvent(ev)
     
-    def cluster_selection(self, min_index):
-        if min_index in self.cluster:
+    def global_index(self, local_index):
+        return copy.copy(self.inds[local_index])
+    
+    def local_index(self, global_index):
+        return list(self.inds).index(global_index)
+    
+    def cluster_selection(self, local_index):
+        gindex = self.global_index(local_index)
+        if gindex in self.cluster:
             return
-        colors = copy.deepcopy(self.colors)
-        self.cluster.append(min_index)
+        colors = copy.deepcopy(self.plot.color)
+        self.cluster.append(gindex)
+        self.on_cluster_changed()
         for index in self.cluster:
-            colors[index] = np.array([0,1,0,1])
+            colors[self.local_index(index)] = np.array([0,1,0,1])
         self.plot.setData(color=colors)
         self.update_text()
         
-    def moving_selection(self, min_index, lpos):
-        colors = copy.deepcopy(self.colors)
-        self.cluster = []
-        colors[min_index] = np.array([1,0,0,1])
+    def on_cluster_changed(self):
+        self.int_energies = []
+        self.int_energy = None
+        
+    def moving_selection(self, local_index, lpos):
+        colors = copy.deepcopy(self.plot.color)
+        #self.cluster = []
+        self.selected_last_color = copy.deepcopy(colors[local_index])
+        colors[local_index] = self.red
         if not self.dragging:
             self.dragging = True
             self.last_pos = lpos
             self.previous_pos = lpos # for undo
-            self.selected = min_index
+            self.selected = local_index
             self.update_text()
         self.plot.setData(color=colors)
                 
@@ -305,6 +365,9 @@ Moved atom {selected_id}
         if self.dragging:
             if ev.button() == QtCore.Qt.RightButton:
                 self.dragging = False
+                colors = copy.deepcopy(self.plot.color)
+                colors[self.selected] = self.selected_last_color
+                self.plot.setData(color=colors)
                 self.selected = None
                 self.update_text()
         return super().mouseReleaseEvent(ev)
@@ -331,7 +394,10 @@ Moved atom {selected_id}
             dx = (lpos.x() - self.last_pos.x())/view_w
             dy = (lpos.y() - self.last_pos.y())/view_h
             self.last_pos = lpos
-            self.atoms[self.selected] += (camera_x*dx + camera_y*dy)*scale
+            dr = (camera_x*dx + camera_y*dy)*scale
+            self.atoms[self.selected] += dr
+            self.parent.system.move_atom(self.global_index(self.selected), dr)
+            self.int_energy = None
             self.plot.setData(pos=self.atoms)
             self.last_selected = copy.copy(self.selected)
         return super().mouseMoveEvent(ev)
@@ -349,6 +415,8 @@ Moved atom {selected_id}
         self.atoms[self.last_selected] += (camera_x*dx + camera_y*dy)*scale
         self.plot.setData(pos=self.atoms)
         self.previous_pos = None
+        
+
 
 if __name__ == '__main__':    
     app = QtWidgets.QApplication(sys.argv)    
