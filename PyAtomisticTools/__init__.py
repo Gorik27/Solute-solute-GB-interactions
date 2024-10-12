@@ -40,7 +40,7 @@ class System:
             fname = f"tmp_out{i}"
             with open(fname, 'w') as f:
                 i+=1
-                p = Popen(task.split(),stdout=f)
+                p = Popen(task.split(),stdout=f, shell=True)
             processes.append((p, fname))
             
         es = []
