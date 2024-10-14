@@ -94,6 +94,7 @@
     </property>
     <addaction name="actionNeighbors_cutoff"/>
     <addaction name="actionShow_Hide_non_GB_atoms"/>
+    <addaction name="actionRevert"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuEdit"/>
@@ -123,6 +124,11 @@
    </property>
    <property name="text">
     <string>Hide non GB atoms</string>
+   </property>
+  </action>
+  <action name="actionRevert">
+   <property name="text">
+    <string>Revert changes</string>
    </property>
   </action>
  </widget>

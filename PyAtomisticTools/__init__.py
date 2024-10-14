@@ -64,7 +64,9 @@ class System:
             raise AttributeError("system hasn't been set!")
             
     def move_atom(self, id, dr):
-        self.system[id, 2:5] += dr
+        ids = list(self.ids)
+        ind = ids.index(id)
+        self.system[ind, 2:5] += dr
         
     @property
     def ids(self):
@@ -78,6 +80,7 @@ class System:
         self.gb_initialized = True
         self._gb_ids = data[:,0]
         self._gb = np.isin(self.ids, self._gb_ids)
+        self.gbfile = filename
     
     @property
     def gb_ids(self):
@@ -154,6 +157,7 @@ class System:
         self.bounds = bounds
         self.system = data
         self.initialized = True
+        self.datfile = filename
         return natoms, bounds, data
     
     def write(self, filename):

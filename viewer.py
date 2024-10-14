@@ -51,6 +51,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actionOpen_GBs.triggered.connect(self.open_gb)
         self.actionShow_Hide_non_GB_atoms.triggered.connect(self.switch_gb)
         self.actionNeighbors_cutoff.triggered.connect(self.set_neigbors_cutoff)
+        self.actionRevert.triggered.connect(self.revert_changes)
+        
+    def revert_changes(self):
+        gbfile = self.system.gbfile
+        self._open_dat(self.system.datfile, show=False)
+        self._open_gb(gbfile)
+        self.switch_gb()
         
         
     def set_neigbors_cutoff(self):
@@ -63,27 +70,32 @@ class MainWindow(QtWidgets.QMainWindow):
         fname = QFileDialog.getOpenFileName(self, 'Open file', 
                                             '.',"LAMMPS data (*.dat *.txt)")
         if fname[0]:
-            self.filename_dat = fname[0]
-            self.system = pat.System()
-            self.natoms, self.bounds, _ = self.system.read(self.filename_dat)
-            self.rs = self.system.coords
-            self.ids = self.system.ids
-            self.r0 = np.transpose(np.mean(self.bounds, axis=1))
-            self.rs -= self.r0
-            self.colors = np.array([[0,0,1,1]]*len(self.rs))
-            self.gb = None
-            self.only_gb = False
+            self._open_dat(fname[0])
+    
+    def _open_dat(self, fname, show=True):
+        self.system = pat.System()
+        self.natoms, self.bounds, _ = self.system.read(fname)
+        self.rs = self.system.coords
+        self.ids = self.system.ids
+        self.r0 = np.transpose(np.mean(self.bounds, axis=1))
+        self.rs -= self.r0
+        self.colors = np.array([[0,0,1,1]]*len(self.rs))
+        self.gb = None
+        self.only_gb = False
+        if show:
             self.actionShow_Hide_non_GB_atoms.setChecked(False) 
             self.GLwidget.myreload(self.rs, self.colors, 
                                  self.selection_cutoff, self.pairs)
-            
+        
     def open_gb(self):
         fname = QFileDialog.getOpenFileName(self, 'Open file', 
                                             '.',"GBs ids (*.txt)")
         if fname[0]:
-            self.filename_gb = fname[0]
-            self.system.read_gb('GBs.txt')
-            self.gb = self.system.gb
+            self._open_gb(fname[0])
+            
+    def _open_gb(self, fname):
+        self.system.read_gb(fname)
+        self.gb = self.system.gb
             
     def switch_gb(self):
         if self.only_gb:
@@ -132,7 +144,7 @@ class My_GLViewWidget(gl.GLViewWidget):
         self.plot = gl.GLScatterPlotItem()
         self.addItem(self.plot)
         self.dragging = False
-        self.size = 0.5
+        self.size = 0.8
         self._cluster = []
         self.cluster_view = False
         self.previous_pos = None
@@ -188,7 +200,7 @@ class My_GLViewWidget(gl.GLViewWidget):
             self.cluster_view = True
             cluster = self.atoms0[self.cluster]
             selection = self.select_nearest(cluster)
-            self.atoms = self.atoms0[selection]
+            self.atoms = copy.deepcopy(self.atoms0[selection])
             self.ids = self.ids0[selection]
             self.inds = self.inds0[selection]
             self.last_offset = np.mean(self.atoms, axis=0)
@@ -262,13 +274,17 @@ Moved atom {selected_id}
             for index in self.cluster:
                 colors[index] = self.green
             self.plot.setData(pos=self.atoms0-self.last_offset, color=colors)
+            self.atoms = copy.deepcopy(self.atoms0-self.last_offset)
             self.cluster_view = False
         
     def reset_origin(self):
         if not self.cluster_view:
             self.plot.setData(pos=self.atoms0)
+            self.atoms = copy.deepcopy(self.atoms0)
         
     def mousePressEvent(self, ev):
+        print('mouse_move_event')
+        print(ev.button())
         if ev.button() == QtCore.Qt.RightButton:
             lpos = ev.position() if hasattr(ev, 'position') else ev.localPos()
             self.mousePos = lpos
@@ -315,6 +331,7 @@ Moved atom {selected_id}
     
     def local_index(self, global_index):
         return list(self.inds).index(global_index)
+    
     
     def cluster_selection(self, local_index):
         gindex = self.global_index(local_index)
@@ -381,7 +398,7 @@ Moved atom {selected_id}
             dr = (camera_x*dx + camera_y*dy)*scale
             self.atoms[self.selected] += dr
             self.atoms0[self.global_index(self.selected)] += dr
-            self.parent.system.move_atom(self.global_index(self.selected), dr)
+            self.parent.system.move_atom(self.ids0[self.global_index(self.selected)], dr)
             self.int_energy = None
             self.plot.setData(pos=self.atoms)
             self.last_selected = copy.copy(self.selected)
@@ -400,7 +417,7 @@ Moved atom {selected_id}
         dr = (camera_x*dx + camera_y*dy)*scale
         self.atoms[self.last_selected] += dr
         self.atoms0[self.global_index(self.last_selected)] += dr
-        self.parent.system.move_atom(self.global_index(self.last_selected), dr)
+        self.parent.system.move_atom(self.ids0[self.global_index(self.last_selected)], dr)
         self.plot.setData(pos=self.atoms)
         self.previous_pos = None
         
