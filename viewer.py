@@ -111,12 +111,17 @@ class MainWindow(QtWidgets.QMainWindow):
 
 class My_GLViewWidget(gl.GLViewWidget):
     blue = np.array([0,0,1,1])
+    blue_op = np.array([0,0,1,0.5])
     green = np.array([0,1,0,1])
     red = np.array([1,0,0,1])
     def __init__(self, points, colors, selection_cutoff, pairs, parent):
         super().__init__()
-        self.selected_pair_index = -1
         self.parent = parent
+        self.myreload(points, colors, selection_cutoff, pairs)
+        
+    def myreload(self, points, colors, selection_cutoff, pairs):
+        self.clear()
+        self.selected_pair_index = -1
         self.atoms = points
         self.natoms = len(points)
         self.atoms0 = copy.deepcopy(points)
@@ -140,29 +145,9 @@ class My_GLViewWidget(gl.GLViewWidget):
         self.selected = None
         self.int_energy = None
         self.int_energies = []
-        
-    def myreload(self, points, colors, selection_cutoff, pairs):
-        self.clear()
-        self.selected_pair_index = -1
-        self.atoms = points
-        self.natoms = len(points)
-        self.atoms0 = copy.deepcopy(points)
-        self.pairs = pairs
-        self.npairs = len(pairs)
-        self.colors = colors
-        self.selection_cutoff = selection_cutoff
-        self.plot = gl.GLScatterPlotItem()
-        self.addItem(self.plot)
-        self.dragging = False
-        self.size = 0.5
-        self._cluster = []
-        self.cluster_view = False
-        self.previous_pos = None
-        self.plot.setData(pos=self.atoms, color=self.colors, size=self.size, 
-                          pxMode=False)
 
     def keyPressEvent(self, ev):
-        if ev.key() == QtCore.Qt.Key_Tab:# to do!!!!!!!!!!
+        if ev.nativeVirtualKey() == QtCore.Qt.Key_Tab:# to do!!!!!!!!!!
             if self.selected_pair_index == -1:
                 self.selected_pair_index = 0
             elif self.selected_pair_index < self.npairs:
@@ -171,16 +156,15 @@ class My_GLViewWidget(gl.GLViewWidget):
                 self.selected_pair_index = 0
                 
             self.select_pair()
-        elif ev.key() == QtCore.Qt.Key_Q:
+        elif ev.nativeVirtualKey() == QtCore.Qt.Key_Q:
             self.select_cluster()
-        elif ev.key() == QtCore.Qt.Key_R:
+        elif ev.nativeVirtualKey() == QtCore.Qt.Key_R:
             self.full_view()
-        elif ev.key() == QtCore.Qt.Key_O:
+        elif ev.nativeVirtualKey() == QtCore.Qt.Key_O:
             self.reset_origin()
-        elif ev.key() == (Qt.Key_Control and Qt.Key_Z):
+        elif ev.nativeVirtualKey() == (Qt.Key_Control and Qt.Key_Z):
             return self.undo_movement()
-        elif ev.key() == QtCore.Qt.Key_Space:
-            print('space')
+        elif ev.nativeVirtualKey() == QtCore.Qt.Key_Space:
             self.calc_int()
         return super().keyPressEvent(ev)
     
@@ -396,6 +380,7 @@ Moved atom {selected_id}
             self.last_pos = lpos
             dr = (camera_x*dx + camera_y*dy)*scale
             self.atoms[self.selected] += dr
+            self.atoms0[self.global_index(self.selected)] += dr
             self.parent.system.move_atom(self.global_index(self.selected), dr)
             self.int_energy = None
             self.plot.setData(pos=self.atoms)
@@ -412,7 +397,10 @@ Moved atom {selected_id}
         camera_y = self.last_camera_y
         dx = (self.previous_pos.x() - self.last_pos.x())/view_w
         dy = (self.previous_pos.y() - self.last_pos.y())/view_h
-        self.atoms[self.last_selected] += (camera_x*dx + camera_y*dy)*scale
+        dr = (camera_x*dx + camera_y*dy)*scale
+        self.atoms[self.last_selected] += dr
+        self.atoms0[self.global_index(self.last_selected)] += dr
+        self.parent.system.move_atom(self.global_index(self.last_selected), dr)
         self.plot.setData(pos=self.atoms)
         self.previous_pos = None
         

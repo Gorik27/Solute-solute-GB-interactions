@@ -7,7 +7,7 @@ boundary p p p
 variable id index None
 variable structure index sname
 
-log int.log
+log seg.log
 include minimization_params.txt
 
 # ATOMS DEFINITION
@@ -25,7 +25,7 @@ include GB_potential_AgNi.txt
 # ---------- Run Minimization --------------------- 
 minimize ${etol} ${ftol} ${maxiter} ${maxeval} 
 
-#write_data int_minimized.dat
+write_data minimized_structures/seg_minimized_${id}.dat
 variable Peng equal pe
 run 0
 print "Seg energy ${Peng}"

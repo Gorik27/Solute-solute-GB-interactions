@@ -27,7 +27,7 @@ include GB_potential_AgNi.txt
 # ---------- Run Minimization --------------------- 
 minimize ${etol} ${ftol} ${maxiter} ${maxeval} 
 
-#write_data int_minimized.dat
+write_data minimized_structures/int_minimized_${id1}_${id2}.dat
 variable Peng equal pe
 run 0
 print "Seg energy ${Peng}"
