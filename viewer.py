@@ -39,6 +39,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.colors = np.array([[0,0,1,1]]*len(self.rs))
         self.selection_cutoff = 0.03
         self.neighbors_cutoff = 11
+        self.cutoff_slider.setValue(self.neighbors_cutoff)
 
         self.GLwidget = My_GLViewWidget(self.rs, self.colors, 
                                         self.selection_cutoff, self.pairs, self)
@@ -50,8 +51,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actionOpen.triggered.connect(self.open_dat)
         self.actionOpen_GBs.triggered.connect(self.open_gb)
         self.actionShow_Hide_non_GB_atoms.triggered.connect(self.switch_gb)
-        self.actionNeighbors_cutoff.triggered.connect(self.set_neigbors_cutoff)
+        self.actionNeighbors_cutoff.triggered.connect(self.input_neigbors_cutoff)
         self.actionRevert.triggered.connect(self.revert_changes)
+        
+        self.cutoff_slider.valueChanged.connect(self.set_neigbors_cutoff)
         
     def revert_changes(self):
         gbfile = self.system.gbfile
@@ -60,11 +63,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.switch_gb()
         
         
-    def set_neigbors_cutoff(self):
+    def input_neigbors_cutoff(self):
         text, ok = QInputDialog.getText(self, 'input dialog', 'Neighbors cutoff (A)')
         if ok:
-            self.neighbors_cutoff = float(text)
-            self.GLwidget.update_cutoff()
+            self.set_neigbors_cutoff(float(text))
+            self.cutoff_slider.setValue(float(text))
+        
+    def set_neigbors_cutoff(self, val):
+        self.neighbors_cutoff = val
+        self.GLwidget.update_cutoff()
+        
+        
         
     def open_dat(self):
         fname = QFileDialog.getOpenFileName(self, 'Open file', 
@@ -82,6 +91,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.colors = np.array([[0,0,1,1]]*len(self.rs))
         self.gb = None
         self.only_gb = False
+        l = np.sum((self.bounds[:,0] - self.bounds[:,1])**2)**0.5
+        self.cutoff_slider.setMaximum(l)
+        self.cutoff_slider.setMinimum(0)
         if show:
             self.actionShow_Hide_non_GB_atoms.setChecked(False) 
             self.GLwidget.myreload(self.rs, self.colors, 
